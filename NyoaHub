@@ -568,33 +568,56 @@ end)
 local MainTab = Window:CreateTab("🌾 Automation", nil) -- Title, Image
 local MainSection = MainTab:CreateSection("Main")
 
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local autoHarvestEnabled = false
+local tpHeightOffset = 3 -- offset to avoid clipping
+
+local function harvestPlant(plant)
+    if plant and plant:FindFirstChild("ClickDetector") then
+        plant.ClickDetector:FireClick()
+    end
+end
+
+local function tpTo(position)
+    local hrp = player.Character:WaitForChild("HumanoidRootPart")
+    hrp.CFrame = CFrame.new(position + Vector3.new(0, tpHeightOffset, 0))
+end
+
+local function getMaturePlants()
+    local maturePlants = {}
+    for _, plot in pairs(workspace.Plots:GetChildren()) do
+        if plot:FindFirstChild("Plant") then
+            local plant = plot.Plant
+            if plant:FindFirstChild("Mature") and plant.Mature.Value == true then
+                table.insert(maturePlants, plant)
+            end
+        end
+    end
+    return maturePlants
+end
+
+spawn(function()
+    while true do
+        wait(0.05)
+        if autoHarvestEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local plants = getMaturePlants()
+            for _, plant in ipairs(plants) do
+                if autoHarvestEnabled and plant and plant.Parent then
+                    tpTo(plant.Position)
+                    harvestPlant(plant)
+                end
+            end
+        end
+    end
+end)
+
 local Toggle = MainTab:CreateToggle({
     Name = "Auto Harvest",
     CurrentValue = false,
     Flag = "AutoHarvestToggle",
     Callback = function(Value)
-        _G.AutoHarvestEnabled = Value
-    end,
+        autoHarvestEnabled = Value
+    end
 })
-
-_G.AutoHarvestEnabled = false
-local RunService = game:GetService("RunService")
-
-local function autoHarvest()
-    for _, plant in pairs(workspace:GetDescendants()) do
-        if plant:IsA("Model") and plant:FindFirstChild("Harvestable") then
-            if plant.Harvestable.Value == true then
-                local collectEvent = plant:FindFirstChild("Collect")
-                if collectEvent and collectEvent:IsA("RemoteEvent") then
-                    collectEvent:FireServer()
-                end
-            end
-        end
-    end
-end
-
-RunService.RenderStepped:Connect(function()
-    if _G.AutoHarvestEnabled then
-        autoHarvest()
-    end
-end)
