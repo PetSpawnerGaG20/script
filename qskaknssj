@@ -37,7 +37,7 @@ Key = {"https://pastebin.com/raw/hMbvbNrn"} -- List of keys that will be accepte
 }
 })
 
-local MainTab = Window:CreateTab("👤 Player", nil) -- Title, Image
+local MainTab = Window:CreateTab("👤 Scripts", nil) -- Title, Image
 local MainSection = MainTab:CreateSection("Main")
 
 Rayfield:Notify({
@@ -559,9 +559,6 @@ closebutton.Position =  UDim2.new(0, 0, -1, 27)
 end)
 end,
 })
-
-local MainTab = Window:CreateTab("👾 Script", nil) -- Title, Image
-local MainSection = MainTab:CreateSection("Main")
 
 Local Toggle = MainTab:CreateToggle({
    Name = "Slap Aura",
