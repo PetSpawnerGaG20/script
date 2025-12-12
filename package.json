@@ -2,7 +2,7 @@
   "name": "nyoa-shop",
   "version": "1.0.0",
   "description": "Full frontend+backend express site in one file",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
     "start": "node server.js"
   },
@@ -10,3 +10,4 @@
     "express": "^4.19.2"
   }
 }
+
