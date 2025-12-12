@@ -1,16 +1,12 @@
 {
-  "name": "nyoass-site",
+  "name": "nyoa-shop",
   "version": "1.0.0",
-  "description": "Nyoa.Ss Pixel Money Website + Script Cloud Server",
-  "main": "index.js",
+  "description": "Full frontend+backend express site in one file",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "express": "^4.19.2"
   }
 }
-
-
