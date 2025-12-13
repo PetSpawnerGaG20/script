@@ -14,7 +14,6 @@ app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* ================= FRONT ================= */
-
 app.get("/", (req, res) => {
 res.send(`<!DOCTYPE html>
 <html>
@@ -70,6 +69,7 @@ r.readAsText(f);
 
 function go(){
 if(!code.value||!pass.value) return alert("Missing data");
+
 fetch("/save",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
@@ -77,18 +77,30 @@ body:JSON.stringify({code:code.value,pass:pass.value})
 })
 .then(r=>r.json())
 .then(d=>{
+if(!d.id){
+alert("Obfuscation failed. Check server logs.");
+return;
+}
 currentId = d.id;
-res.innerText='loadstring(game:HttpGet("'+location.origin+'/raw/'+d.id+'"))()';
+res.innerText =
+'loadstring(game:HttpGet("'+location.origin+'/raw/'+currentId+'"))()';
 out.style.display="block";
+})
+.catch(()=>{
+alert("Server error");
 });
 }
 
 function copy(){
+if(!currentId) return;
 navigator.clipboard.writeText(res.innerText);
 }
 
 function download(){
-if(!currentId) return;
+if(!currentId){
+alert("Nothing to download");
+return;
+}
 window.location.href = "/download/" + currentId;
 }
 </script>
@@ -97,7 +109,6 @@ window.location.href = "/download/" + currentId;
 });
 
 /* ================= PROMETHEUS ================= */
-
 function obfuscatePrometheus(code, cb) {
     const id = Math.random().toString(36).slice(2, 10);
     const inFile = path.join(__dirname, `tmp_${id}.lua`);
@@ -119,7 +130,6 @@ function obfuscatePrometheus(code, cb) {
 }
 
 /* ================= SAVE ================= */
-
 app.post("/save", (req, res) => {
     const { code, pass } = req.body;
     if (!code || !pass) return res.status(400).json({ error: "Missing" });
@@ -134,7 +144,6 @@ app.post("/save", (req, res) => {
 });
 
 /* ================= RAW ================= */
-
 app.get("/raw/:id", (req, res) => {
     const item = storage[req.params.id];
     if (!item) return res.status(404).send("--");
@@ -167,7 +176,7 @@ button{background:#7d4cff;font-weight:bold}
 <body>
 <div class="box">
 <h3>Enter password</h3>
-<input id="p">
+<input id="p" placeholder="Password">
 <button onclick="unlock()">Unlock</button>
 <textarea id="c"></textarea>
 <button id="cp" style="display:none" onclick="copy()">Copy</button>
@@ -186,7 +195,6 @@ function copy(){navigator.clipboard.writeText(c.value);}
 });
 
 /* ================= DOWNLOAD ================= */
-
 app.get("/download/:id", (req, res) => {
     const item = storage[req.params.id];
     if (!item) return res.status(404).end();
@@ -197,7 +205,6 @@ app.get("/download/:id", (req, res) => {
 });
 
 /* ================= START ================= */
-
 app.listen(PORT, () =>
     console.log("Running http://localhost:" + PORT)
 );
