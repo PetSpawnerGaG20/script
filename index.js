@@ -58,6 +58,8 @@ small{opacity:.6}
 </div>
 
 <script>
+let currentId = null;
+
 file.onchange=function(){
 const f=file.files[0];
 if(!f||!f.name.endsWith(".txt")) return alert("Only .txt");
@@ -75,9 +77,9 @@ body:JSON.stringify({code:code.value,pass:pass.value})
 })
 .then(r=>r.json())
 .then(d=>{
+currentId = d.id;
 res.innerText='loadstring(game:HttpGet("'+location.origin+'/raw/'+d.id+'"))()';
 out.style.display="block";
-out.dataset.id=d.id;
 });
 }
 
@@ -86,14 +88,15 @@ navigator.clipboard.writeText(res.innerText);
 }
 
 function download(){
-location.href="/download/"+out.dataset.id;
+if(!currentId) return;
+window.location.href = "/download/" + currentId;
 }
 </script>
 </body>
 </html>`);
 });
 
-/* ================= OBFUSCATE VIA PROMETHEUS ================= */
+/* ================= PROMETHEUS ================= */
 
 function obfuscatePrometheus(code, cb) {
     const id = Math.random().toString(36).slice(2, 10);
@@ -115,14 +118,14 @@ function obfuscatePrometheus(code, cb) {
     });
 }
 
-/* ================= API ================= */
+/* ================= SAVE ================= */
 
 app.post("/save", (req, res) => {
     const { code, pass } = req.body;
     if (!code || !pass) return res.status(400).json({ error: "Missing" });
 
     obfuscatePrometheus(code, (err, obf) => {
-        if (err) return res.status(500).json({ error: "Prometheus failed" });
+        if (err) return res.status(500).json({ error: "Prometheus error" });
 
         const id = Math.random().toString(36).slice(2, 10);
         storage[id] = { code: obf, pass };
@@ -136,30 +139,48 @@ app.get("/raw/:id", (req, res) => {
     const item = storage[req.params.id];
     if (!item) return res.status(404).send("--");
 
-    const accept = req.headers.accept || "";
+    const ua = req.headers["user-agent"] || "";
 
-    if (!accept.includes("text/html")) {
+    // Roblox / executors
+    if (ua.toLowerCase().includes("roblox")) {
         res.set("Content-Type", "text/plain");
         return res.send(item.code);
     }
 
+    // Browser
     res.send(`<!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><title>Protected</title></head>
-<body style="background:#111;color:#fff;font-family:Arial;
-display:flex;justify-content:center;align-items:center;height:100vh">
-<div>
-<input id="p" placeholder="Password">
-<button onclick="u()">Unlock</button>
-<pre id="c" style="display:none"></pre>
-<script>
-function u(){
-if(p.value!=="${item.pass}") return alert("Wrong password");
-c.innerText=\`${item.code.replace(/`/g,"\\`")}\`;
-c.style.display="block";
-}
-</script>
+<head>
+<meta charset="UTF-8">
+<title>Protected</title>
+<style>
+body{background:#0e0e0e;color:#fff;font-family:Arial;
+display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
+.box{background:#1c1c1c;padding:20px;border-radius:14px;width:100%;max-width:500px}
+input,button,textarea{
+width:100%;margin-top:10px;padding:10px;
+background:#262626;border:none;color:#fff;border-radius:8px}
+textarea{height:220px;font-family:monospace;display:none}
+button{background:#7d4cff;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="box">
+<h3>Enter password</h3>
+<input id="p">
+<button onclick="unlock()">Unlock</button>
+<textarea id="c"></textarea>
+<button id="cp" style="display:none" onclick="copy()">Copy</button>
 </div>
+<script>
+function unlock(){
+if(p.value !== "${item.pass}") return alert("Wrong password");
+c.value = \`${item.code.replace(/`/g,"\\`")}\`;
+c.style.display = "block";
+cp.style.display = "block";
+}
+function copy(){navigator.clipboard.writeText(c.value);}
+</script>
 </body>
 </html>`);
 });
