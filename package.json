@@ -1,24 +1,13 @@
 {
-  "name": "lua-obfuscator-locker",
+  "name": "lua-obfuscator",
   "version": "1.0.0",
-  "description": "Lua Obfuscator and Script Locker Web Server",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
-  "keywords": [
-    "lua",
-    "obfuscator",
-    "roblox",
-    "express",
-    "security"
-  ],
-  "author": "Nyoass",
-  "license": "ISC",
   "dependencies": {
+    "express": "^4.18.2",
     "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "cors": "^2.8.5"
   }
 }
