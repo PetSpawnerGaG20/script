@@ -1,9 +1,6 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
-const { exec } = require("child_process");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,7 +10,44 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
+/* ================= OBFUSCATOR ================= */
+
+function obfuscateLua(code) {
+    const key = Math.floor(Math.random() * 200) + 40;
+    let enc = [];
+
+    for (let i = 0; i < code.length; i++) {
+        enc.push((code.charCodeAt(i) + key + i) % 256);
+    }
+
+    const part1 = enc.slice(0, Math.floor(enc.length / 2));
+    const part2 = enc.slice(Math.floor(enc.length / 2));
+
+    return `
+local _k=${key}
+local _a={${part1.join(",")}}
+local _b={${part2.join(",")}}
+
+local function _d(t)
+    local r={}
+    local p=1
+    for i=1,#t do
+        r[p]=string.char((t[i]-_k-(p-1))%256)
+        p=p+1
+    end
+    return table.concat(r)
+end
+
+local _s=_d(_a).._d(_b)
+
+local _f=(loadstring or load)
+assert(_f,"loadstring missing")
+_f(_s)()
+`;
+}
+
 /* ================= FRONT ================= */
+
 app.get("/", (req, res) => {
 res.send(`<!DOCTYPE html>
 <html>
@@ -38,9 +72,9 @@ small{opacity:.6}
 </head>
 <body>
 <div class="box">
-<h3>Lua Obfuscator (Prometheus)</h3>
+<h3>Lua Obfuscator</h3>
 
-<textarea id="code" placeholder="Paste code or upload .txt"></textarea>
+<textarea id="code" placeholder="Paste Lua code or upload .txt"></textarea>
 
 <input type="file" id="file" accept=".txt" style="display:none">
 <button class="upload" onclick="file.click()">Upload .txt</button>
@@ -57,7 +91,7 @@ small{opacity:.6}
 </div>
 
 <script>
-let currentId = null;
+let currentId=null;
 
 file.onchange=function(){
 const f=file.files[0];
@@ -69,7 +103,6 @@ r.readAsText(f);
 
 function go(){
 if(!code.value||!pass.value) return alert("Missing data");
-
 fetch("/save",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
@@ -77,86 +110,51 @@ body:JSON.stringify({code:code.value,pass:pass.value})
 })
 .then(r=>r.json())
 .then(d=>{
-if(!d.id){
-alert("Obfuscation failed. Check server logs.");
-return;
-}
-currentId = d.id;
-res.innerText =
-'loadstring(game:HttpGet("'+location.origin+'/raw/'+currentId+'"))()';
+if(!d.id) return alert("Obfuscation failed");
+currentId=d.id;
+res.innerText='loadstring(game:HttpGet("'+location.origin+'/raw/'+currentId+'"))()';
 out.style.display="block";
-})
-.catch(()=>{
-alert("Server error");
 });
 }
 
 function copy(){
-if(!currentId) return;
 navigator.clipboard.writeText(res.innerText);
 }
 
 function download(){
-if(!currentId){
-alert("Nothing to download");
-return;
-}
-window.location.href = "/download/" + currentId;
+if(!currentId) return;
+location.href="/download/"+currentId;
 }
 </script>
 </body>
 </html>`);
 });
 
-/* ================= PROMETHEUS ================= */
-function obfuscatePrometheus(code, cb) {
-    const id = Math.random().toString(36).slice(2, 10);
-    const inFile = path.join(__dirname, `tmp_${id}.lua`);
-    const outFile = path.join(__dirname, `out_${id}.lua`);
-
-    fs.writeFileSync(inFile, code);
-
-    const cmd = `lua prometheus/cli.lua --preset Medium "${inFile}" -o "${outFile}"`;
-
-    exec(cmd, (err) => {
-        if (err) return cb(err);
-
-        const result = fs.readFileSync(outFile, "utf8");
-        fs.unlinkSync(inFile);
-        fs.unlinkSync(outFile);
-
-        cb(null, result);
-    });
-}
-
 /* ================= SAVE ================= */
+
 app.post("/save", (req, res) => {
     const { code, pass } = req.body;
     if (!code || !pass) return res.status(400).json({ error: "Missing" });
 
-    obfuscatePrometheus(code, (err, obf) => {
-        if (err) return res.status(500).json({ error: "Prometheus error" });
-
-        const id = Math.random().toString(36).slice(2, 10);
-        storage[id] = { code: obf, pass };
-        res.json({ id });
-    });
+    const obf = obfuscateLua(code);
+    const id = Math.random().toString(36).slice(2, 10);
+    storage[id] = { code: obf, pass };
+    res.json({ id });
 });
 
 /* ================= RAW ================= */
+
 app.get("/raw/:id", (req, res) => {
     const item = storage[req.params.id];
     if (!item) return res.status(404).send("--");
 
-    const ua = req.headers["user-agent"] || "";
+    const ua = (req.headers["user-agent"] || "").toLowerCase();
 
-    // Roblox / executors
-    if (ua.toLowerCase().includes("roblox")) {
+    if (ua.includes("roblox")) {
         res.set("Content-Type", "text/plain");
         return res.send(item.code);
     }
 
-    // Browser
     res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -176,17 +174,17 @@ button{background:#7d4cff;font-weight:bold}
 <body>
 <div class="box">
 <h3>Enter password</h3>
-<input id="p" placeholder="Password">
-<button onclick="unlock()">Unlock</button>
+<input id="p">
+<button onclick="u()">Unlock</button>
 <textarea id="c"></textarea>
 <button id="cp" style="display:none" onclick="copy()">Copy</button>
 </div>
 <script>
-function unlock(){
-if(p.value !== "${item.pass}") return alert("Wrong password");
-c.value = \`${item.code.replace(/`/g,"\\`")}\`;
-c.style.display = "block";
-cp.style.display = "block";
+function u(){
+if(p.value!=="${item.pass}") return alert("Wrong password");
+c.value=\`${item.code.replace(/`/g,"\\`")}\`;
+c.style.display="block";
+cp.style.display="block";
 }
 function copy(){navigator.clipboard.writeText(c.value);}
 </script>
@@ -195,16 +193,17 @@ function copy(){navigator.clipboard.writeText(c.value);}
 });
 
 /* ================= DOWNLOAD ================= */
+
 app.get("/download/:id", (req, res) => {
     const item = storage[req.params.id];
     if (!item) return res.status(404).end();
-
-    res.setHeader("Content-Disposition", "attachment; filename=obfuscated.lua");
-    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Content-Disposition","attachment; filename=obfuscated.lua");
+    res.setHeader("Content-Type","text/plain");
     res.send(item.code);
 });
 
 /* ================= START ================= */
+
 app.listen(PORT, () =>
     console.log("Running http://localhost:" + PORT)
 );
