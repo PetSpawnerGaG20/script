@@ -1,12 +1,24 @@
 {
-  "name": "nyoa-shop",
+  "name": "lua-obfuscator-locker",
   "version": "1.0.0",
-  "description": "Full frontend+backend express site in one file",
+  "description": "Lua Obfuscator and Script Locker Web Server",
   "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
+  "keywords": [
+    "lua",
+    "obfuscator",
+    "roblox",
+    "express",
+    "security"
+  ],
+  "author": "Nyoass",
+  "license": "ISC",
   "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
     "express": "^4.19.2"
   }
 }
