@@ -4,40 +4,59 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const codes = {}; // В памяти храним коды и пароль
+const codes = {};
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-// === ЛОГИКА ОБФУСКАЦИИ (JS версия) ===
-function obfuscateLua(sourceCode) {
-    // 1. Генерируем случайный ключ
-    let key = Math.floor(Math.random() * 999999) + 1;
-    const startKey = key;
+// --- Утилиты обфускации ---
+
+function generateRandomName(length = 8) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+    let result = chars[Math.floor(Math.random() * 52)];
+    for (let i = 1; i < length; i++) {
+        result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+}
+
+function obfuscateLuaAdvanced(sourceCode) {
+    const keyMap = {
+        string_sub: generateRandomName(),
+        string_byte: generateRandomName(),
+        string_char: generateRandomName(),
+        table_insert: generateRandomName(),
+        table_concat: generateRandomName(),
+        bit_bxor: generateRandomName(),
+        loadFunc: generateRandomName(),
+        decoderFunc: generateRandomName(),
+        keyVar: generateRandomName(),
+        payloadVar: generateRandomName(),
+        resultVar: generateRandomName()
+    };
     
-    // 2. Шифруем строку в escape-последовательности Lua (\ddd)
+    let key = Math.floor(Math.random() * 9999999) + 1000;
+    const startKey = key;
     let encrypted = "";
+
     for (let i = 0; i < sourceCode.length; i++) {
         const charCode = sourceCode.charCodeAt(i);
-        // Простой XOR с изменением ключа (LCG)
         const xorByte = charCode ^ (key % 255);
-        
-        // Форматируем в \ddd (например \065)
         encrypted += "\\" + xorByte.toString().padStart(3, '0');
-
-        // Обновляем ключ (тот же алгоритм, что будет в Lua)
         key = (key * 1664525 + 1013904223) % 4294967296;
     }
 
-    // 3. Создаем Lua лоадер, который расшифрует это на лету
-    // Используем странные имена переменных (_k, _s, _d) чтобы запутать чтение
     return `
--- [[ Protected by Nyoass Locker ]] --
-local _k = ${startKey}
-local _s = "${encrypted}"
+local ${keyMap.keyVar} = ${startKey}
+local ${keyMap.payloadVar} = "${encrypted}"
+local ${keyMap.string_sub} = string.sub
+local ${keyMap.string_byte} = string.byte
+local ${keyMap.string_char} = string.char
+local ${keyMap.table_insert} = table.insert
+local ${keyMap.table_concat} = table.concat
 
-local function _b(a,b) 
+local function ${keyMap.bit_bxor}(a,b) 
     return bit32 and bit32.bxor(a,b) or (function(x,y) 
         local p,c=1,0 while x>0 and y>0 do 
         local rx,ry=x%2,y%2 if rx~=ry then c=c+p end 
@@ -48,24 +67,31 @@ local function _b(a,b)
     end)(a,b)
 end
 
-local function _d(s, k)
+local function ${keyMap.decoderFunc}(s, k)
     local r = {}
     for i = 1, #s do
-        local b = string.byte(s, i)
-        table.insert(r, string.char(_b(b, k % 255)))
+        local b = ${keyMap.string_byte}(s, i)
+        ${keyMap.table_insert}(r, ${keyMap.string_char}(${keyMap.bit_bxor}(b, k % 255)))
         k = (k * 1664525 + 1013904223) % 4294967296
     end
-    return table.concat(r)
+    return ${keyMap.table_concat}(r)
 end
 
-local _c = _d(_s, _k)
-local _run = loadstring or load
-getfenv().script = nil -- Прячем скрипт из окружения (опционально)
-_run(_c)()
+local ${keyMap.resultVar} = ${keyMap.decoderFunc}(${keyMap.payloadVar}, ${keyMap.keyVar})
+
+local ${keyMap.loadFunc} = loadstring or load
+local chunk = ${keyMap.loadFunc}(${keyMap.resultVar})
+
+if not chunk then 
+    error(string.format("Verification Error %d", ${keyMap.keyVar} % 100)) 
+end
+
+pcall(chunk) 
 `;
 }
 
-// --- Главная страница (frontend)
+// --- Роуты сервера ---
+
 app.get("/", (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="ru">
@@ -120,7 +146,8 @@ function generate(){
   .then(r=>r.json())
   .then(data=>{
     const url = location.origin + "/raw/" + data.id;
-    const loadStr = 'loadstring(game:HttpGet("' + url + '"))()';
+    // Используем rawget для Luau, чтобы избежать проблем с глобальными переменными
+    const loadStr = 'loadstring(game.HttpGet("' + url + '"))()';
     
     document.getElementById("resultBox").style.display = "block";
     const linkEl = document.getElementById("resultLink");
@@ -136,22 +163,17 @@ function generate(){
 </html>`);
 });
 
-// --- API: Шифруем и сохраняем
 app.post("/save", (req, res) => {
     const { code, pass } = req.body;
     
-    // !!! ВОТ ЗДЕСЬ ПРОИСХОДИТ МАГИЯ !!!
-    // Мы не сохраняем чистый код, мы сохраняем его обфусцированную версию
-    const protectedCode = obfuscateLua(code);
+    const protectedCode = obfuscateLuaAdvanced(code);
 
     const id = Math.random().toString(36).substring(2,10);
-    codes[id] = { code: protectedCode, pass }; // Сохраняем зашифрованную версию
+    codes[id] = { code: protectedCode, pass };
     
-    console.log(`[LOG] New code saved via ID: ${id}`);
     res.json({ id });
 });
 
-// --- Страница RAW
 app.get("/raw/:id", (req, res) => {
     const { id } = req.params;
     const item = codes[id];
@@ -159,16 +181,14 @@ app.get("/raw/:id", (req, res) => {
 
     const ua = req.get("User-Agent") || "";
     
-    // Если это Roblox, отдаем код сразу
-    if(ua.includes("Roblox")) {
+    if(ua.includes("Roblox") || ua.includes("Luau")) {
         res.set("Content-Type","text/plain");
         return res.send(item.code);
     }
 
-    // Если браузер - просим пароль
     res.send(`<!DOCTYPE html>
 <html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Protected</title>
-<style>body{background:#111;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}input,button{padding:10px;border-radius:5px;border:none;}button{background:#7d4cff;color:white;cursor:pointer;}</style>
+<style>body{background:#111;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}input,button{padding:10px;border-radius:5px;border:none;margin-top:10px;}button{background:#7d4cff;color:white;cursor:pointer;}</style>
 </head>
 <body>
 <form method="POST" action="/raw/${id}/view">
@@ -179,18 +199,16 @@ app.get("/raw/:id", (req, res) => {
 </body></html>`);
 });
 
-// --- Проверка пароля в браузере (чтобы глазками посмотреть на обфусцированный код)
 app.post("/raw/:id/view", (req,res) => {
     const { id } = req.params;
     const { pass } = req.body;
     const item = codes[id];
 
-    if(!item) return res.send("Not found");
+    if(!item) return res.status(404).send("Not found");
     if(pass !== item.pass) return res.send("❌ Неверный пароль");
 
     res.set("Content-Type","text/plain");
-    res.send(item.code); // Отдаем обфусцированный код
+    res.send(item.code);
 });
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
-
