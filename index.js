@@ -12,30 +12,39 @@ app.use(express.urlencoded({ extended: true }));
 
 /* ================= OBFUSCATOR ================= */
 
-function obfuscateLua(code) {
+function obfuscateLua(src) {
 
-    // кодируем каждый символ в octal
-    let oct = "";
-    for (let i = 0; i < code.length; i++) {
-        let o = code.charCodeAt(i).toString(8).padStart(3, "0");
-        oct += "\\" + o;
+    let out = "";
+    for (let i = 0; i < src.length; i++) {
+        out += "\\" + src.charCodeAt(i).toString(8).padStart(3, "0");
     }
 
     return `
---[[ obfuscated ]]
-local _s = "${oct}"
+do
+    local a = "${out}"
+    local b = {}
+    local c = 1
 
-local function _d(s)
-    local out = {}
-    for o in string.gmatch(s, "\\\\(%d%d%d)") do
-        out[#out+1] = string.char(tonumber(o, 8))
+    while c <= #a do
+        local d = string.sub(a, c+1, c+3)
+        b[#b+1] = string.char(tonumber(d, 8))
+        c = c + 4
     end
-    return table.concat(out)
+
+    local e = table.concat(b)
+
+    if not e or #e == 0 then
+        return
+    end
+
+    local f = loadstring or load
+    if not f then return end
+
+    local g, h = pcall(f, e)
+    if g and h then
+        h()
+    end
 end
-
-local _src = _d(_s)
-
-loadstring(_src)()
 `;
 }
 
