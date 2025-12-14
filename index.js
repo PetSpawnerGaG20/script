@@ -13,36 +13,38 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= OBFUSCATOR ================= */
 
 function obfuscateLua(code) {
-    const key = Math.floor(Math.random() * 200) + 40;
-    let enc = [];
+    const key = Math.floor(Math.random() * 50) + 10;
 
+    let enc = "";
     for (let i = 0; i < code.length; i++) {
-        enc.push((code.charCodeAt(i) + key + i) % 256);
+        enc += String.fromCharCode(
+            code.charCodeAt(i) ^ key
+        );
     }
 
-    const part1 = enc.slice(0, Math.floor(enc.length / 2));
-    const part2 = enc.slice(Math.floor(enc.length / 2));
+    enc = Buffer.from(enc, "binary").toString("base64");
 
     return `
-local _k=${key}
-local _a={${part1.join(",")}}
-local _b={${part2.join(",")}}
+local _k = ${key}
+local _e = "${enc}"
 
-local function _d(t)
-    local r={}
-    local p=1
-    for i=1,#t do
-        r[p]=string.char((t[i]-_k-(p-1))%256)
-        p=p+1
+local function _d(s)
+    local b = game:GetService("HttpService"):Base64Decode(s)
+    local r = {}
+    for i = 1, #b do
+        r[i] = string.char(string.byte(b, i) ~ _k)
     end
     return table.concat(r)
 end
 
-local _s=_d(_a).._d(_b)
+local _src = _d(_e)
 
-local _f=(loadstring or load)
-assert(_f,"loadstring missing")
-_f(_s)()
+local _ls = loadstring
+if not _ls then
+    error("loadstring unavailable")
+end
+
+_ls(_src)()
 `;
 }
 
