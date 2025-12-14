@@ -13,36 +13,44 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= OBFUSCATOR ================= */
 
 function obfuscateLua(src) {
-
-    let out = "";
+    let enc = [];
     for (let i = 0; i < src.length; i++) {
-        out += "\\" + src.charCodeAt(i).toString(8).padStart(3, "0");
+        enc.push(src.charCodeAt(i) + 3);
     }
 
     return `
 do
-    local a = "${out}"
-    local b = {}
-    local c = 1
+    local _A1,_B2,_C3,_D4 = {},0,0,false
+    local _X9 = {${enc.join(",")}}
 
-    while c <= #a do
-        local d = string.sub(a, c+1, c+3)
-        b[#b+1] = string.char(tonumber(d, 8))
-        c = c + 4
+    if _X9 then
+        for _i=1,#_X9 do
+            if _i % 2 == 0 then
+                _B2 = _X9[_i] - 3
+            elseif _i % 2 == 1 then
+                _B2 = _X9[_i] - 3
+            else
+                -- fake branch
+                _B2 = 0
+            end
+            _A1[#_A1+1] = string.char(_B2)
+        end
+    else
+        -- dead code
+        _D4 = true
     end
 
-    local e = table.concat(b)
-
-    if not e or #e == 0 then
-        return
-    end
-
-    local f = loadstring or load
-    if not f then return end
-
-    local g, h = pcall(f, e)
-    if g and h then
-        h()
+    do
+        local _SRC = table.concat(_A1)
+        if _SRC ~= "" then
+            local _L = loadstring or load
+            if _L then
+                local _F = _L(_SRC)
+                if _F then
+                    _F()
+                end
+            end
+        end
     end
 end
 `;
