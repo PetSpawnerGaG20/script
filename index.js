@@ -13,38 +13,41 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= OBFUSCATOR ================= */
 
 function obfuscateLua(code) {
-    const key = Math.floor(Math.random() * 50) + 10;
+    const key = Math.floor(Math.random() * 20) + 5;
 
     let enc = "";
     for (let i = 0; i < code.length; i++) {
         enc += String.fromCharCode(
-            code.charCodeAt(i) ^ key
+            code.charCodeAt(i) + key
         );
     }
 
-    enc = Buffer.from(enc, "binary").toString("base64");
+    // делаем строку "грязной"
+    enc = enc.split("").reverse().join("");
+    enc = enc.replace(/\\/g,"\\\\").replace(/"/g,'\\"');
 
     return `
-local _k = ${key}
-local _e = "${enc}"
+local __k = ${key}
+local __s = "${enc}"
 
-local function _d(s)
-    local b = game:GetService("HttpService"):Base64Decode(s)
+local function __d(s)
     local r = {}
-    for i = 1, #b do
-        r[i] = string.char(string.byte(b, i) ~ _k)
+    local p = 1
+    for i = #s, 1, -1 do
+        r[p] = string.char(string.byte(s, i) - __k)
+        p = p + 1
     end
     return table.concat(r)
 end
 
-local _src = _d(_e)
+local __src = __d(__s)
 
-local _ls = loadstring
-if not _ls then
-    error("loadstring unavailable")
+local __ls = loadstring
+if not __ls then
+    error("loadstring missing")
 end
 
-_ls(_src)()
+__ls(__src)()
 `;
 }
 
