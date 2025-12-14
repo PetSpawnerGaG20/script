@@ -13,44 +13,29 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= OBFUSCATOR ================= */
 
 function obfuscateLua(code) {
-    const key = Math.floor(Math.random() * 9) + 1;
 
-    // кодируем ТОЛЬКО в буквы и цифры
-    let enc = "";
+    // кодируем каждый символ в octal
+    let oct = "";
     for (let i = 0; i < code.length; i++) {
-        let c = code.charCodeAt(i);
-        enc += ((c + key) * 7).toString(36);
-        enc += "_";
+        let o = code.charCodeAt(i).toString(8).padStart(3, "0");
+        oct += "\\" + o;
     }
 
     return `
-local __k = ${key}
-local __s = "${enc}"
+--[[ obfuscated ]]
+local _s = "${oct}"
 
-local function __d(s)
+local function _d(s)
     local out = {}
-    for part in string.gmatch(s, "[^_]+") do
-        local n = tonumber(part, 36)
-        if not n then
-            error("decode failed")
-        end
-        table.insert(out, string.char((n / 7) - __k))
+    for o in string.gmatch(s, "\\\\(%d%d%d)") do
+        out[#out+1] = string.char(tonumber(o, 8))
     end
     return table.concat(out)
 end
 
-local __src = __d(__s)
+local _src = _d(_s)
 
-if type(__src) ~= "string" or #__src == 0 then
-    error("invalid source")
-end
-
-local __ls = loadstring
-if not __ls then
-    error("loadstring missing")
-end
-
-__ls(__src)()
+loadstring(_src)()
 `;
 }
 
